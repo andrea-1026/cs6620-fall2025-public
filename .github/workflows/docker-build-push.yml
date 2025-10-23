@@ -49,24 +49,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout code (optional, if you need repo files)
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      # Step 2: Deploy using AWS SSM
-      - name: Send deployment command to EC2 via SSM
-        uses: aws-actions/aws-ssm-send-command@v1
+      # Step 1: Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          instance-ids: ${{ secrets.EC2_INSTANCE_ID }}
-          document-name: "AWS-RunShellScript"
-          parameters: |
-            commands:
-              - echo "Starting deployment on EC2..."
-              - docker pull ${{ secrets.DOCKERHUB_USERNAME }}/cs6620-app:latest
-              - docker stop cs6620-app || true
-              - docker rm cs6620-app || true
-              - docker run -d -p 80:80 --name cs6620-app ${{ secrets.DOCKERHUB_USERNAME }}/cs6620-app:latest
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # Step 2: Send deployment command via AWS CLI
+      - name: Deploy application using AWS CLI
+        run: |
+          echo "Starting deployment on EC2..."
+          aws ssm send-command \
+            --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
+            --document-name "AWS-RunShellScript" \
+            --comment "Automated deployment via GitHub Actions" \
+            --parameters '{
+              "commands": [
+                "docker pull ${{ secrets.DOCKERHUB_USERNAME }}/cs6620-app:latest",
+                "docker stop cs6620-app || true",
+                "docker rm cs6620-app || true",
+                "docker run -d -p 80:5000 --restart unless-stopped --name cs6620-app ${{ secrets.DOCKERHUB_USERNAME }}/cs6620-app:latest"
+              ]
+            }'
